@@ -3,6 +3,8 @@ import { Button } from "../Components/Button"
 import { ChessBoard } from "../Components/ChessBoard"
 import { useSocket } from "../hooks/useSocket"
 import { Chess } from "chess.js";
+import { ConfettiEffect } from "../Components/Confetti";
+import { Card } from "../Components/Card";
 
 
 export const INIT_GAME = "init_game";
@@ -16,6 +18,8 @@ export const Game = () => {
   const [chess, setChess] = useState(new Chess());
   const [board, setBoard] = useState(chess.board());
   const [side, setSide] = useState("white");
+  const [winner, setWinner] = useState("");
+  const [showConfetti, setShowConfetti] = useState(false);
   useEffect(() => {
     if (!socket) return;
     socket.onmessage = (event) => {
@@ -42,6 +46,14 @@ export const Game = () => {
           break;
 
         case GAME_OVER:
+          const lastMove = message.payload.move;
+          // Create a new chess instance with current game state
+          const lastChess = new Chess(chessRef.current.fen());
+          // Apply the move
+          lastChess.move(lastMove);
+          // Update state
+          setChess(lastChess);
+          setWinner(message.payload.winner);
           console.log("Game over");
           break;
       }
@@ -54,9 +66,16 @@ export const Game = () => {
     setBoard(chessRef.current.board());
   }, [chess])
 
+  useEffect(() => {
+    setShowConfetti(true);
+
+  }, [winner])
+
 
   if (!socket) return <div>Loading...</div>;
   return <div>
+    {showConfetti && side === winner && <ConfettiEffect />}
+    {winner && <Card message={side === winner ? "You Won !" : "You Lost"} />}
     <div className=" p-4 ml-20 grid grid-cols-3 gap-2 justify-center items-center ">
       <div className="col-span-2 mt-4 "><ChessBoard chess={chess} side={side} board={board} socket={socket} /></div>
       <div className="flex flex-col gap-5 ">

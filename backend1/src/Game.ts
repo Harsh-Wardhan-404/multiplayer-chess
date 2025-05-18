@@ -49,6 +49,7 @@ export class Game {
         const gameOverMessage = JSON.stringify({
           type: GAME_OVER,
           payload: {
+            move: move,
             winner: this.board.turn() === "w" ? "black" : "white"
           }
         })
