@@ -1,7 +1,8 @@
-export const Button = ({ onClick, children, variant = "primary" }: {
+export const Button = ({ onClick, children, variant = "primary", disabled = false }: {
   onClick: () => void,
   children: React.ReactNode,
-  variant?: "primary" | "danger" | "success"
+  variant?: "primary" | "danger" | "success",
+  disabled?: boolean
 }) => {
   const getButtonClass = () => {
     switch (variant) {
@@ -10,6 +11,12 @@ export const Button = ({ onClick, children, variant = "primary" }: {
       default: return "bg-blue-600 hover:bg-blue-700";
     }
   }
-  return <button onClick={onClick} className={`${getButtonClass()}  text-gray-100 rounded p-2 w-20 font-bold `} > {children}</button >
-
+  const disabledClass = disabled ? "opacity-50 cursor-not-allowed" : "";
+  return <button
+    onClick={onClick}
+    disabled={disabled}
+    className={`${getButtonClass()} ${disabledClass} text-gray-100 rounded p-2 w-20 font-bold`}
+  >
+    {children}
+  </button>
 }

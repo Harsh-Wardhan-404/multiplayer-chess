@@ -20,6 +20,8 @@ export const Game = () => {
   const [side, setSide] = useState("white");
   const [winner, setWinner] = useState("");
   const [showConfetti, setShowConfetti] = useState(false);
+  const [isResigned, setIsResigned] = useState(false);
+
   useEffect(() => {
     if (!socket) return;
     socket.onmessage = (event) => {
@@ -29,7 +31,10 @@ export const Game = () => {
           setChess(new Chess());
           setBoard(chess.board());
           console.log("Color: ", message.payload.color);
-          setSide(message.payload.color)
+          setSide(message.payload.color);
+          setWinner(""); // Reset winner when starting a new game
+          setShowConfetti(false); // Reset confetti when starting a new game
+          setIsResigned(false); // Reset resignation state
           console.log("Game init");
           break;
 
@@ -56,8 +61,12 @@ export const Game = () => {
           setWinner(message.payload.winner);
           console.log("Game over");
           break;
-      }
 
+        case RESIGN:
+          console.log("Opponent resigned");
+          setWinner(message.payload.winner);
+          break;
+      }
     }
   }, [socket])
 
@@ -68,34 +77,50 @@ export const Game = () => {
 
   useEffect(() => {
     setShowConfetti(true);
-
   }, [winner])
 
+  const handleResign = () => {
+    console.log("Resigning");
+    if (!winner) {
+      // If the current player resigns, the opponent wins
+      const oppositeColor = side === "white" ? "black" : "white";
+      setWinner(oppositeColor);
+      setIsResigned(true);
+
+      // Notify server about resignation if needed (for multiplayer games)
+      if (socket) {
+        socket.send(JSON.stringify({
+          type: RESIGN,
+          payload: {
+            player: side
+          }
+        }));
+      }
+    }
+  };
+
+  const handlePlayAgain = () => {
+    if (socket) {
+      socket.send(JSON.stringify({
+        type: INIT_GAME
+      }));
+    }
+  };
 
   if (!socket) return <div>Loading...</div>;
   return <div>
     {showConfetti && side === winner && <ConfettiEffect />}
-    {winner && <Card message={side === winner ? "You Won !" : "You Lost"} />}
+    {(winner || isResigned) && <Card message={side === winner ? "You Won !" : "You Lost"} />}
     <div className=" p-4 ml-20 grid grid-cols-3 gap-2 justify-center items-center ">
       <div className="col-span-2 mt-4 "><ChessBoard chess={chess} side={side} board={board} socket={socket} /></div>
       <div className="flex flex-col gap-5 ">
         <div>
-          <Button variant="success" onClick={() => {
-            socket.send(JSON.stringify({
-              type: INIT_GAME
-            }))
-          }}  >Play</Button>
+          <Button variant="success" onClick={handlePlayAgain}>Play</Button>
         </div>
         <div>
-          <Button variant="danger" onClick={() => {
-            socket.send(JSON.stringify({
-              type: RESIGN
-            }))
-          }}>Resign</Button>
+          <Button variant="danger" onClick={handleResign} disabled={!!winner || isResigned}>Resign</Button>
         </div>
       </div>
     </div>
-
   </div>
-
 }

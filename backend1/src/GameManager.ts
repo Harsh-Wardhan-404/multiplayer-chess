@@ -1,5 +1,5 @@
 import WebSocket from "ws";
-import { INIT_GAME, MOVE } from "./messages";
+import { INIT_GAME, MOVE, RESIGN } from "./messages";
 import { Game } from "./Game";
 
 //Make a users class , currently just keeping it as ws
@@ -46,6 +46,14 @@ export class GameManager {
         if (game) {
           console.log("game found");
           game.makeMove(socket, message.move);
+        }
+      }
+
+      if (message.type === RESIGN) {
+        console.log("Resign req received");
+        const game = this.games.find(game => game.player1 === socket || game.player2 === socket);
+        if (game) {
+          game.resign(socket);
         }
       }
     })
