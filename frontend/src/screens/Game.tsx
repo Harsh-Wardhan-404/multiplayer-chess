@@ -5,6 +5,8 @@ import { useSocket } from "../hooks/useSocket"
 import { Chess } from "chess.js";
 import { ConfettiEffect } from "../Components/Confetti";
 import { Card } from "../Components/Card";
+import { DndProvider } from "react-dnd";
+import { HTML5Backend } from "react-dnd-html5-backend";
 
 
 export const INIT_GAME = "init_game";
@@ -108,19 +110,26 @@ export const Game = () => {
   };
 
   if (!socket) return <div>Loading...</div>;
-  return <div>
-    {showConfetti && side === winner && <ConfettiEffect />}
-    {(winner || isResigned) && <Card message={side === winner ? "You Won !" : "You Lost"} />}
-    <div className=" p-4 ml-20 grid grid-cols-3 gap-2 justify-center items-center ">
-      <div className="col-span-2 mt-4 "><ChessBoard chess={chess} side={side} board={board} socket={socket} /></div>
-      <div className="flex flex-col gap-5 ">
-        <div>
-          <Button variant="success" onClick={handlePlayAgain}>Play</Button>
-        </div>
-        <div>
-          <Button variant="danger" onClick={handleResign} disabled={!!winner || isResigned}>Resign</Button>
+  return <>
+
+
+    <DndProvider backend={HTML5Backend}>
+      <div>
+        {showConfetti && side === winner && <ConfettiEffect />}
+        {(winner || isResigned) && <Card message={side === winner ? "You Won !" : "You Lost"} />}
+        <div className=" p-4 ml-20 grid grid-cols-3 gap-2 justify-center items-center ">
+          <div className="col-span-2 mt-4 "><ChessBoard chess={chess} side={side} board={board} socket={socket} /></div>
+          <div className="flex flex-col gap-5 ">
+            <div>
+              <Button variant="success" onClick={handlePlayAgain}>Play</Button>
+            </div>
+            <div>
+              <Button variant="danger" onClick={handleResign} disabled={!!winner || isResigned}>Resign</Button>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
-  </div>
+    </DndProvider>
+
+  </>
 }

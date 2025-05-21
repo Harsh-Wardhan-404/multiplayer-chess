@@ -1,18 +1,21 @@
 import type { Chess, Color, Move, PieceSymbol, Square } from "chess.js";
-import { useEffect, useState } from "react";
-import bN from '../assets/bN.svg';
-import bK from '../assets/bK.svg';
-import bP from '../assets/bP.svg';
-import bR from '../assets/bR.svg';
-import bQ from '../assets/bQ.svg';
-import bB from '../assets/bB.svg';
-import wN from '../assets/wN.svg';
-import wK from '../assets/wK.svg';
-import wP from '../assets/wP.svg';
-import wR from '../assets/wR.svg';
-import wQ from '../assets/wQ.svg';
-import wB from '../assets/wB.svg';
+import { useEffect, useState, useRef } from "react";
+import { DndProvider, useDrag, useDrop } from 'react-dnd'
+import { Piece, ChessPieceDragLayer } from "./Piece";
+import { HTML5Backend } from "react-dnd-html5-backend";
 
+type piece = {
+  square: Square;
+  type: PieceSymbol;
+  color: Color;
+}
+
+interface DraggablePieceItem {
+  id: string; // Or Square
+  type: PieceSymbol;
+  color: Color;
+  fromSquare: Square;
+}
 
 export const ChessBoard = ({ board, socket, side, chess }: {
   board: ({
@@ -27,6 +30,8 @@ export const ChessBoard = ({ board, socket, side, chess }: {
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState<string | null>(null);
   const [legal, setLegal] = useState<Move[] | null>([]);
+  const dropTargetImgRef = useRef<HTMLImageElement>(null);
+
 
 
   const getNotation = (row: number, col: number) => {
@@ -35,19 +40,7 @@ export const ChessBoard = ({ board, socket, side, chess }: {
     }
     return String.fromCharCode(97 + col) + (8 - row);
   }
-  const getPieceImage = (piece: any) => {
-    const color = piece?.color;
-    switch (piece.type) {
-      case "n": return color === "w" ? wN : bN
 
-      case "k": return color === "w" ? wK : bK
-      case "p": return color === "w" ? wP : bP
-      case "r": return color === "w" ? wR : bR
-      case "q": return color === "w" ? wQ : bQ
-      case "b": return color === "w" ? wB : bB
-      default: return ""
-    }
-  }
 
   useEffect(() => {
     console.log(`ChessBoard useEffect - Side: ${side}, From: ${from}`);
@@ -64,101 +57,125 @@ export const ChessBoard = ({ board, socket, side, chess }: {
     }
   }, [from, chess])
 
-  const isLegal = (row: number, col: number) => {
+  const isLegalSquare = (targetSquare: Square): boolean => {
     if (!legal) return false;
-    const target = getNotation(row, col);
-    return legal.some(move => move.to === target);
-  }
+    return legal.some(move => move.to === targetSquare);
+  };
 
-  const isLegalCaptureTarget = (row: number, col: number) => {
+  const isLegalCaptureOnSquare = (targetSquare: Square): boolean => {
     if (!legal) return false;
-    const target = getNotation(row, col);
-    return legal.some(move => move.to === target && move.captured);
-  }
+    return legal.some(move => move.to === targetSquare && move.captured);
+  };
+
+  const renderSquare = (square: piece | null, rowIndex: number, squareIndex: number) => {
+    const targetNotation = getNotation(rowIndex, squareIndex);
+
+    const [{ isOver, canDrop: canDropSquare }, dropRef] = useDrop(() => ({
+      accept: "piece",
+      drop: (item: DraggablePieceItem) => {
+        const fromSq = item.fromSquare;
+        const toSq = targetNotation;
+
+        // Check for legality again on drop, though canDrop should handle it
+        const currentLegalMoves = chess.moves({ square: fromSq as Square, verbose: true });
+        const isMoveAllowed = currentLegalMoves.some(m => m.to === toSq);
+
+        if (isMoveAllowed) {
+          const moveData = JSON.stringify({
+            type: "move",
+            move: {
+              from: fromSq,
+              to: toSq
+            }
+          });
+          socket.send(moveData);
+          console.log(`Dragged From = ${fromSq} - To = ${toSq}`);
+          setFrom(null); // Clear selection after move
+          setLegal([]);  // Clear legal moves
+        } else {
+          console.log(`Illegal drop: ${fromSq} to ${toSq}`);
+        }
+      },
+      canDrop: (item: DraggablePieceItem) => {
+        if (!chess || item.color !== chess.turn()) { // Ensure it's the current player's piece
+          return false;
+        }
+        const legalMovesForPiece = chess.moves({ square: item.fromSquare as Square, verbose: true });
+        return legalMovesForPiece.some(move => move.to === targetNotation);
+      },
+      collect: (monitor) => ({
+        isOver: !!monitor.isOver(),
+        canDrop: !!monitor.canDrop(), // This reflects the output of our canDrop function
+      }),
+    }), [chess, side, rowIndex, squareIndex]); // Dependencies for useDrop
+
+
+
+
+    const squareColor = (rowIndex + squareIndex) % 2 === 0 ? "bg-[#739552]" : "bg-[#ccccbc]";
+    // Visual feedback for drop target
+    const dropTargetStyle = isOver && canDropSquare ? "bg-yellow-400" : (canDropSquare && !isOver ? "bg-blue-300 opacity-50" : "");
+
+
+    return (
+      <div
+        ref={dropRef as unknown as React.Ref<HTMLDivElement>} // Attach the drop ref to the square
+        onClick={() => {
+          console.log("Clicked on:", targetNotation);
+          if (!from && square && square.color === chess.turn() && square.color === side.charAt(0)) { // Only allow selecting own pieces on own turn
+            setFrom(square.square.toString());
+          } else if (from && isLegalSquare(targetNotation as Square)) { // If a piece is selected and the target is legal (for click-move)
+            const moveData = JSON.stringify({
+              type: "move",
+              move: {
+                from,
+                to: targetNotation
+              }
+            });
+            socket.send(moveData);
+            console.log(`Clicked From = ${from} - To = ${targetNotation}`);
+            setFrom(null);
+            setLegal([]);
+          } else if (from && square?.square === from) { // Deselect if clicking the same piece
+            setFrom(null);
+            setLegal([]);
+          }
+        }}
+        key={squareIndex}
+        className={`w-20 h-20 relative flex items-center justify-center ${squareColor} ${dropTargetStyle}`}
+      >
+        {square && <Piece square={square} />}
+        {!square && isLegalSquare(targetNotation as Square) && !isLegalCaptureOnSquare(targetNotation as Square) &&
+          <div className="w-4 h-4 rounded-full bg-[#797672] bg-opacity-70"></div>
+        }
+        {square && square.color !== chess.turn() && isLegalCaptureOnSquare(targetNotation as Square) &&
+          <div className="absolute inset-1 border-4 border-red-700 rounded-full opacity-60 pointer-events-none"></div>
+        }
+        {/* Highlight for potential drop square */}
+        {/* {isOver && canDropSquare && <div className="absolute inset-0 bg-green-500 opacity-30 pointer-events-none"></div>}
+        {!isOver && canDropSquare && <div className="absolute inset-0 bg-blue-500 opacity-30 pointer-events-none"></div>} */}
+      </div>
+    );
+  };
 
   return <>
-
     <div className="text-white">
       {side === "black" ?
-        [...board].reverse().map((row, rowIndex) => {
-          return <div key={rowIndex} className="flex">
-            {[...row].reverse().map((square, squareIndex) => {
-              const squareColor = (rowIndex + squareIndex) % 2 === 0 ? "bg-[#739552]" : "bg-[#ccccbc]";
-              const pieceColor = square?.color === "w" ? "text-red" : "text-black";
-
-              return <div onClick={() => {
-                console.log(getNotation(rowIndex, squareIndex));
-                if (!from) {
-                  setFrom(square?.square?.toString() ?? null)
-                  // let moves = chess.moves({ square: square?.square, verbose: false });
-                  // setLegal(moves);
-                  console.log(("legal moves: " + legal));
-                } else {
-                  let toRaw = getNotation(rowIndex, squareIndex);
-                  setTo(toRaw);
-                  const moveData = JSON.stringify({
-                    type: "move",
-                    move: {
-                      from,
-                      to: toRaw
-                    }
-                  })
-                  socket.send(moveData)
-                  console.log(`From = ${from} - To = ${toRaw}`);
-                  setFrom(null);
-                  setLegal([]);
-                }
-              }} key={squareIndex} className={`w-20 h-20 relative flex items-center justify-center ${squareColor} ${pieceColor}`}>
-                {square ? <img src={getPieceImage(square)} className="w-full h-full" alt="" /> : ""}
-                {!square && isLegal(rowIndex, squareIndex) && !isLegalCaptureTarget(rowIndex, squareIndex) && // Ensure it's not a capture target
-                  <div className="w-4 h-4 rounded-full bg-[#797672] bg-opacity-70"></div>
-                }
-                {square && square.color !== chess.turn() && isLegalCaptureTarget(rowIndex, squareIndex) &&
-                  <div className="absolute inset-0 border-4 border-red-500 rounded-full opacity-40 pointer-events-none"></div>
-                }
-              </div>;
-            })}
+        [...board].reverse().map((rowSquares, visualRowIndex) => (
+          <div key={visualRowIndex} className="flex">
+            {[...rowSquares].reverse().map((sq, visualSquareIndex) =>
+              renderSquare(sq, visualRowIndex, visualSquareIndex)
+            )}
           </div>
-        }) : board.map((row, rowIndex) => {
-          return <div key={rowIndex} className="flex">
-            {row.map((square, squareIndex) => {
-              const squareColor = (rowIndex + squareIndex) % 2 === 0 ? "bg-[#739552]" : "bg-[#ccccbc]";
-              const pieceColor = square?.color === "w" ? "text-red" : "text-black";
-
-              return <div onClick={() => {
-                console.log(getNotation(rowIndex, squareIndex));
-                if (!from) {
-                  setFrom(square?.square.toString() ?? null)
-                  let moves = chess.moves({ square: square?.square, verbose: true });
-                  setLegal(moves);
-                  console.log(("legal moves: " + moves));
-                } else {
-                  let toRaw = getNotation(rowIndex, squareIndex);
-                  setTo(toRaw);
-                  const moveData = JSON.stringify({
-                    type: "move",
-                    move: {
-                      from,
-                      to: toRaw
-                    }
-                  })
-                  socket.send(moveData)
-                  console.log(`From = ${from} - To = ${toRaw}`);
-                  setFrom(null);
-                }
-              }} key={squareIndex} className={`w-20 h-20 relative flex items-center justify-center ${squareColor} ${pieceColor}`}>{square ? <img src={getPieceImage(square)} className="w-full h-full" alt="" /> : ""}
-                {!square && isLegal(rowIndex, squareIndex) && !isLegalCaptureTarget(rowIndex, squareIndex) && // Ensure it's not a capture target
-                  <div className="w-4 h-4 rounded-full bg-[#797672] bg-opacity-70"></div>
-                }
-                {square && square.color !== chess.turn() && isLegalCaptureTarget(rowIndex, squareIndex) &&
-                  <div className="absolute inset-0 border-4 border-red-500 rounded-full opacity-40 pointer-events-none"></div>
-                }
-              </div>;
-            })}
+        )) :
+        board.map((rowSquares, visualRowIndex) => (
+          <div key={visualRowIndex} className="flex">
+            {rowSquares.map((sq, visualSquareIndex) =>
+              renderSquare(sq, visualRowIndex, visualSquareIndex)
+            )}
           </div>
-        })}
-
-      {/* {side === "black" && } */}
+        ))}
     </div>
+    <ChessPieceDragLayer />
   </>
 }
