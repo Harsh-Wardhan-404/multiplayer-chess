@@ -5,10 +5,13 @@ A real-time multiplayer chess game built with React, Node.js, and WebSockets. Th
 ## Screenshots
 
 ### Landing Page
-![Landing Page](frontend/public/landing.png)
+![Landing Page](frontend/public/home.jpeg)
 
-### Gameplay
-![Gameplay Screenshot](frontend/public/gameplay.png)
+### Multiplayer Game
+![Multiplayer Game](frontend/public/multiplayer.jpeg)
+
+### Victory Screen
+![Victory Screen](frontend/public/won.jpeg)
 
 ## Features
 
