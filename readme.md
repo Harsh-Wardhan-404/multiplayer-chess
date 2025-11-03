@@ -2,7 +2,13 @@
 
 A real-time multiplayer chess game built with React, Node.js, and WebSockets. This project features a unique "Joker" piece for an extra layer of strategy and fun.
 
-![Chessboard Screenshot](frontend/public/chessboard.png)
+## Screenshots
+
+### Landing Page
+![Landing Page](frontend/public/landing.png)
+
+### Gameplay
+![Gameplay Screenshot](frontend/public/gameplay.png)
 
 ## Features
 
